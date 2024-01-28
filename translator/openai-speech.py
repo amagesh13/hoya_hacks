@@ -38,17 +38,60 @@ speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, au
 # tts sentence end mark
 tts_sentence_end = [ ".", "!", "?", ";", "。", "！", "？", "；", "\n" ]
 
+# ------------- RAG ----------------------
+# Creating specific embedding and loading directory storing all scraped data
+embeddings = AzureOpenAIEmbeddings(deployment="text-embedding-ada-002", chunk_size=1)
+loader = DirectoryLoader('./texts', glob="*.txt", loader_cls=TextLoader, loader_kwargs={'autodetect_encoding': True})
+
+# loading the scraped data and splitting into tokens
+documents = loader.load()
+text_splitter = TokenTextSplitter(chunk_size=1000, chunk_overlap=0)
+docs = text_splitter.split_documents(documents)
+
+# faiss uses a similarity search and clusterizes vectorized data to help semantically search for "relevant" data
+db = faiss.from_documents(documents=docs, embedding=embeddings)
+
+# Adapt if needed; can provide a role for chatbot through chat history parameter
+CONDENSE_QUESTION_PROMPT = PromptTemplate.from_template("""Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.
+
+Chat History:
+{chat_history}
+Follow Up Input: {question}
+Standalone question:""")
+
+# This sets up RAG using a conversational retrieval chain object across the scraped data
+qa = ConversationalRetrievalChain.from_llm(llm=client,
+                                        retriever=db.as_retriever(),
+                                        condense_question_prompt=CONDENSE_QUESTION_PROMPT,
+                                        return_source_documents=True,
+                                        verbose=True)
+
+# storing memory of chats
+chat_history = []
+# query = "Insert Prompt"
+# result = qa({"question": query, "chat_history": chat_history})
+
+# print("Question:", query)
+# print("Answer:", result["answer"])
+
+
 # Prompts Azure OpenAI with a request and synthesizes the response.
 def ask_openai(prompt):
     # Ask Azure OpenAI in streaming way
-    response = client.chat.completions.create(model=deployment_id, max_tokens=200, stream=True, messages=[
-        {"role": "user", "content": prompt}
-    ])
+
+    # response = client.chat.completions.create(model=deployment_id, max_tokens=200, stream=True, messages=[
+    #     {"role": "user", "content": prompt}
+    # ])
+
+    # use RAG + OpenAI to answer a prompt!
+    result = qa({"question": prompt, "chat_history": chat_history})
     collected_messages = []
     last_tts_request = None
 
+    # print(result)
+
     # iterate through the stream response stream
-    for chunk in response:
+    for chunk in result:
         if len(chunk.choices) > 0:
             chunk_message = chunk.choices[0].delta.content  # extract the message
             if chunk_message is not None:
