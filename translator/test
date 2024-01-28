@@ -1,0 +1,5 @@
+setx OPEN_AI_KEY 9bc7aa01624c4189a517e523d293aa1a
+setx OPEN_AI_ENDPOINT https://hack0.openai.azure.com/
+setx OPEN_AI_DEPLOYMENT_NAME=Test03
+setx SPEECH_KEY 011660aaef91455fa822d0b9c77f81ed
+setx SPEECH_REGION eastus
